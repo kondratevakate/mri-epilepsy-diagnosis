@@ -9,27 +9,7 @@ from tqdm import tqdm
 
 from sklearn.preprocessing import LabelEncoder
 
-def reshape_image(img, coord_min, img_shape):
-        """
-        Function reshapes an image precerving location
-        img: np.array 
-        coord_min: central coordinates
-        img_shape: desired image shape
-        """
-        img = img[coord_min[0]:coord_min[0] + img_shape[0],
-                coord_min[1]:coord_min[1] + img_shape[1],
-                coord_min[2]:coord_min[2] + img_shape[2],]
-        if img.shape[:3] != img_shape:
-            print("Current image shape: {}".format(img.shape[:3]))
-            print("Desired image shape: {}".format(img_shape))
-            raise AssertionError
-        return img.reshape((1,) + img_shape)
-    
-def load_nii_to_array(nii_path):
-        """ Function returns the data from the *.nii 
-            file as np.array()
-        """
-        return np.asanyarray(nib.load(nii_path).dataobj)
+
 
 class MriSegmentation(data.Dataset):
     """
@@ -98,7 +78,28 @@ class MriSegmentation(data.Dataset):
         self.mask_path = mask_path
         self.mask = mask
         assert mask in ['seg','bb','combined'], "Invalid mask name!"
-        
+    
+    def reshape_image(img, coord_min, img_shape):
+        """
+        Function reshapes an image precerving location
+        img: np.array 
+        coord_min: central coordinates
+        img_shape: desired image shape
+        """
+        img = img[coord_min[0]:coord_min[0] + img_shape[0],
+                coord_min[1]:coord_min[1] + img_shape[1],
+                coord_min[2]:coord_min[2] + img_shape[2],]
+        if img.shape[:3] != img_shape:
+            print("Current image shape: {}".format(img.shape[:3]))
+            print("Desired image shape: {}".format(img_shape))
+            raise AssertionError
+        return img.reshape((1,) + img_shape)
+    
+    def load_nii_to_array(nii_path):
+        """ Function returns the data from the *.nii 
+            file as np.array()
+        """
+        return np.asanyarray(nib.load(nii_path).dataobj)    
     
     def __getitem__(self, index):
             img_path = self.img_files[index]
