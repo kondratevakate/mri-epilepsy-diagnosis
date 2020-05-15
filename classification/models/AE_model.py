@@ -22,14 +22,14 @@ class DownBlock(nn.Module):
             self.block.update({'act': nn.ReLU()})
 
     def forward(self, x):
-        #         x_before_pool = None
-        #         _,D,H,W = x.shape
-        #         shape_before_pool = (H,W,D) #if not even size
+#         x_before_pool = None
+        _,_,D,H,W = x.shape
+        shape_before_pool = (D,H,W) #if not even size
         for key, module in self.block.items():
             #             if key == 'poolig' and self.skip == True: # if use skip conection
             #                 x_before_pool = x
             x = module(x)
-        return x  # ,x_before_pool shape_before_pool,
+        return x, shape_before_pool  # ,x_before_pool
 
 
 class UpBlock(nn.Module):
@@ -69,8 +69,10 @@ class UpBlock(nn.Module):
             #                 assert x_before_pool == None, 'wrang skip_map'
             #                 x = torch.cat([x, x_before_pool], dim=1)
             x = module(x)
-        #             if key =='up' and (shape_before_pool[0] > x.shape[2] or shape_before_pool[1] > x.shape[3]): #not even size
-        #                 x = nn.functional.interpolate(x,(shape_before_pool[0],shape_before_pool[1]))
+            if key =='up' and (shape_before_pool[0] > x.shape[1] or 
+                               shape_before_pool[1] > x.shape[2] or 
+                               shape_before_pool[2] > x.shape[3]): #not even size
+                x = F.interpolate(x,(shape_before_pool[0],shape_before_pool[1], shape_before_pool[2]))
         return x
 
 
@@ -89,13 +91,13 @@ class Encoder(nn.Module):
                           ))
 
     def forward(self, x):
-        #         skip_list = []
-        #         size_list = []
+#         skip_list = []
+        size_list = []
         for module in self.encode:
-            x = module(x)
-        #             skip_list.append(before_pooling)
-        #             size_list.append(size)
-        return x
+            x, size = module(x)
+            size_list.append(size)
+#             skip_list.append(before_pooling)
+        return x, size_list
 
 
 class Decoder(nn.Module):
@@ -112,11 +114,10 @@ class Decoder(nn.Module):
         if kwargs['reduce_size']:
             self.decode.append(nn.ConvTranspose3d(1, 1, kernel_size=4, stride=4, padding=0))
 
-    def forward(self, x):
-        #         size_list = []
-        #         skip_list.reverse()
-        for module in self.decode:
-            x = module(x)
+    def forward(self, x, size_list):
+        size_list.reverse()
+        for i, module in enumerate(self.decode):
+            x = module(x, size_list[i])
         return x
 
 
@@ -155,8 +156,8 @@ class AE(nn.Module):
         self.dec = Decoder(**decoder_kwargs)
 
     def forward(self, x):
-        x = self.enc(x)
-        x = self.dec(x)
+        x, size_list = self.enc(x)
+        x = self.dec(x, size_list)
         return x
 
 
