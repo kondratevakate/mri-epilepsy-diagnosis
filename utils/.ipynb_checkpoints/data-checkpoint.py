@@ -99,7 +99,7 @@ class MriSegmentation(data.Dataset):
     def __init__(self, sample, prefix=False, mask_path=False,
                  image_path='/gpfs/gpfs0/sbi/data/fcd_classification_bank',
                  targets_path='../targets/targets_fcd_bank.csv', ignore_missing=True,
-                 coord_min=(20,20,20,), img_shape=(192, 192, 192,),
+                 coord_min=(30,30,30,), img_shape=(192, 192, 192,),
                  mask ='seg'):
         
         super(MriSegmentation, self).__init__()
@@ -180,7 +180,7 @@ class MriClassification(data.Dataset):
     def __init__(self, sample, prefix=False, mask_path=False,
                  image_path='/gpfs/gpfs0/sbi/data/fcd_classification_bank',
                  targets_path='../targets/targets_fcd_bank.csv', ignore_missing=True,
-                 coord_min=(20,20,20,), img_shape=(192, 192, 192,),
+                 coord_min=(30,30,30,), img_shape=(192, 192, 192,),
                  data_type ='seg'):
         
         super(MriClassification, self).__init__()
