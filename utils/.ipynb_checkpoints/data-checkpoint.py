@@ -8,6 +8,10 @@ import torch.utils.data as data
 from tqdm import tqdm
 
 from sklearn.preprocessing import LabelEncoder
+import pandas as pd
+pd.options.mode.chained_assignment = None  # default='warn' 
+# Ignoring SettingWithCopyWarning: A value is trying to be set on a copy of a slice from a DataFrame
+
 
 def reshape_image(img, coord_min, img_shape):
     """
@@ -29,7 +33,13 @@ def load_nii_to_array(nii_path):
     """ Function returns the data from the *.nii 
             file as np.array()
     """
-    return np.asanyarray(nib.load(nii_path).dataobj)
+    try:
+        result = np.asanyarray(nib.load(nii_path).dataobj)
+        return (result)
+    except OSError:
+        print(FileNotFoundError("No such file or no access: '%s'" % nii_path))
+        return('')
+             
 
 def targets_complete(sample, 
                      prefix=False, 
@@ -49,29 +59,40 @@ def targets_complete(sample,
     if prefix:
         clause = (targets['sample'] == sample)&(targets['patient'].str.startswith(prefix))
      
-    files['patient']= targets['patient'][clause]
-    files['fcd'] = targets['fcd'][clause]
-    files['scan'] = targets['scan'][clause] 
+    files['patient']= targets['patient'][clause].copy()
+    files['fcd'] = targets['fcd'][clause].copy()
+    files['scan'] = targets['scan'][clause].copy()
     
     if mask_path:
         files['img_mask'] = ''
         
     elif sample == 'all':
-        files['patient']= targets['patient']
-        files['fcd'] = targets['fcd']
-        files['scan'] = targets['scan']               
+        files['patient']= targets['patient'].copy()
+        files['fcd'] = targets['fcd'].copy()
+        files['scan'] = targets['scan'].copy()             
         
     for i in tqdm(range(len(files))):
         for file_in_folder in glob.glob(os.path.join(image_path,'*norm*')):
-                if (files['patient'].iloc[i] in file_in_folder):
-                    files['img_file'].iloc[i] = file_in_folder
+                if sample == 'pirogov':
+                    if ((files['patient'].iloc[i] +'_norm.nii.gz') == file_in_folder.split('/')[-1]):
+                        files['img_file'].iloc[i] = file_in_folder
+                else:
+                    if (files['patient'].iloc[i] in file_in_folder):
+                        files['img_file'].iloc[i] = file_in_folder
         
         for file_in_folder in glob.glob(os.path.join(image_path,'*aseg*')):
-                if (files['patient'].iloc[i] in file_in_folder):
-                    files['img_seg'].iloc[i] = file_in_folder       
+                if sample == 'pirogov':
+#                     print((files['patient'].iloc[i] +'_aparc+aseg.nii.gz'), file_in_folder.split('/')[-1])
+                    if ((files['patient'].iloc[i] +'_aparc+aseg.nii.gz') == file_in_folder.split('/')[-1]) or\
+    ((files['patient'].iloc[i] +'_aparc+aseg.nii') == file_in_folder.split('/')[-1]):
+                        files['img_seg'].iloc[i] = file_in_folder 
+                else:    
+                    if (files['patient'].iloc[i] in file_in_folder):
+                        files['img_seg'].iloc[i] = file_in_folder       
         if mask_path:
             for file_in_folder in glob.glob(os.path.join(mask_path,'*.nii*')):
-                files['img_mask'].iloc[i] = file_in_folder
+                if ((files['patient'].iloc[i] +'.nii.gz') == file_in_folder.split('/')[-1]):
+                    files['img_mask'].iloc[i] = file_in_folder
         
     # saving only full pairs of data
     if ignore_missing:
