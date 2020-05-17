@@ -233,11 +233,11 @@ class MriClassification(data.Dataset):
             seg = reshape_image(seg_array, self.coord_min, self.img_shape)
             
             if self.data_type == 'img':
-                return torch.from_numpy(img).float()
+                return torch.from_numpy(img).float(), self.target[index], self.scan[index]
             
             elif self.data_type == 'seg':
                 # not binarising cortical structures
-                return torch.from_numpy(seg).float()
+                return torch.from_numpy(seg).float(), self.target[index], self.scan[index]
 
     def __len__(self):
         return len(self.img_files)
