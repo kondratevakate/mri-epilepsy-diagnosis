@@ -224,19 +224,17 @@ class MriClassification(data.Dataset):
             
     def __getitem__(self, index):
             img_path = self.img_files[index]
-            seg_path = self.img_seg[index]
-            
-            img_array = load_nii_to_array(img_path)
-            seg_array = load_nii_to_array(seg_path)
-                                   
+            img_array = load_nii_to_array(img_path)                       
             img = reshape_image(img_array, self.coord_min, self.img_shape)
-            seg = reshape_image(seg_array, self.coord_min, self.img_shape)
             
             if self.data_type == 'img':
                 return torch.from_numpy(img).float(), self.target[index], self.scan[index]
             
             elif self.data_type == 'seg':
                 # not binarising cortical structures
+                seg_path = self.img_seg[index]
+                seg_array = load_nii_to_array(seg_path)
+                seg = reshape_image(seg_array, self.coord_min, self.img_shape)
                 return torch.from_numpy(seg).float(), self.target[index], self.scan[index]
 
     def __len__(self):

@@ -19,7 +19,7 @@ def run_one_epoch(model, loader, criterion, train, device, optimizer=None):
     probs = []
     targets = []
 
-    for data, target in tqdm(loader):
+    for data, target, _ in tqdm(loader):
         data = data.to(device, dtype=torch.float)
         target = target.long().to(device)
         outputs = model(data)
@@ -157,7 +157,7 @@ def cross_val_score(
         val_dataset = train_dataset
         use_rest = False
 
-    cv_splits = list(cv.split(X=np.arange(len(train_dataset)), y=train_dataset.labels))
+    cv_splits = list(cv.split(X=np.arange(len(train_dataset)), y=train_dataset.target))
     val_metrics = []
 
     for i in range(len(cv_splits)):
@@ -165,7 +165,7 @@ def cross_val_score(
 
         # train data
         if model_load_path is None or transfer or finetune:
-            train_idx = stratified_batch_indices(train_idx, train_dataset.labels[train_idx])
+            train_idx = stratified_batch_indices(train_idx, train_dataset.target[train_idx])
             train_loader = DataLoader(Subset(train_dataset, train_idx),
                                       shuffle=False,
                                       batch_size=batch_size,
