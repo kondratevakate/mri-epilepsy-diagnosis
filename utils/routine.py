@@ -36,8 +36,7 @@ def run_one_epoch(model, loader, criterion, train, device, optimizer=None):
     return losses, probs, targets
 
 
-def train(
-    model, optimizer, train_dataloader, val_dataloader, device,
+def train(model, optimizer, train_dataloader, val_dataloader, device,
     metric, verbose=0, model_save_path=None,
         max_epoch=10, eps=3e-3, max_patience=10):
     

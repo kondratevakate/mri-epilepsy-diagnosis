@@ -46,7 +46,7 @@ def targets_complete(sample,
                      mask_path=False,
                      image_path='/gpfs/gpfs0/sbi/data/fcd_classification_bank',
                      targets_path='../targets/targets_fcd_bank.csv', 
-                     ignore_missing=True):
+                     ignore_missing=True, data_type = False):
     """
     Custom function to complete dataset composition in the local environement.
     Walks through directories and completes fils list, according to targets.
@@ -69,8 +69,8 @@ def targets_complete(sample,
     elif sample == 'all':
         files['patient']= targets['patient'].copy()
         files['fcd'] = targets['fcd'].copy()
-        files['scan'] = targets['scan'].copy()             
-        
+        files['scan'] = targets['scan'].copy()   
+                
     for i in tqdm(range(len(files))):
         for file_in_folder in glob.glob(os.path.join(image_path,'*norm*')):
                 if sample == 'pirogov':
@@ -94,9 +94,17 @@ def targets_complete(sample,
                 if ((files['patient'].iloc[i] +'.nii.gz') == file_in_folder.split('/')[-1]):
                     files['img_mask'].iloc[i] = file_in_folder
         
-    # saving only full pairs of data
+    # treating missing objects
     if ignore_missing:
-        files.dropna(subset = ['img_seg','img_file'], inplace= True)
+        # if only 'img' is needed for classification
+        if data_type =='img':
+            files.dropna(subset = ['img_file'], inplace= True)
+         # if only 'seg' is needed for classification
+        elif data_type =='seg':
+            files.dropna(subset = ['img_seg'], inplace= True)
+        # saving only full pairs of data    
+        else: 
+            files.dropna(subset = ['img_seg','img_file'], inplace= True)
         
     # reindexing an array
     files = files.reset_index(drop=True)
@@ -121,7 +129,7 @@ class MriSegmentation(data.Dataset):
                  image_path='/gpfs/gpfs0/sbi/data/fcd_classification_bank',
                  targets_path='../targets/targets_fcd_bank.csv', ignore_missing=True,
                  coord_min=(30,30,30,), img_shape=(192, 192, 192,),
-                 mask ='seg'):
+                 mask ='img'):
         
         super(MriSegmentation, self).__init__()
         print('Assembling data for: ', sample, ' sample.')
@@ -208,7 +216,7 @@ class MriClassification(data.Dataset):
         print('Assembling data for: ', sample, ' sample.')
 
         files,le = targets_complete(sample, prefix, mask_path, image_path,
-                                 targets_path, ignore_missing)
+                                 targets_path, ignore_missing, data_type)
         
         self.img_files = files['img_file']
         self.img_seg = files['img_seg']
