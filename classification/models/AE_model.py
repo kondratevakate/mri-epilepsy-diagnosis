@@ -188,3 +188,30 @@ class Discriminator(nn.Module):
         for key, module in self.disc.items():
             x = module(x)
         return x
+
+class Classificator(nn.Module):
+    def __init__(self, **kwargs):
+        super(Classificator, self).__init__()
+        self.clf = nn.ModuleDict({
+            'conv': nn.Conv3d(in_channels=kwargs['c_in'],
+                              out_channels=kwargs['c_out'],
+                              kernel_size=kwargs['conv_k'],
+                              stride=kwargs['conv_s'],
+                              padding=kwargs['conv_pad'],
+                              ),
+            'flat': nn.Flatten(),
+            'l1': nn.Linear(kwargs['l_in'], kwargs['l_out'])
+        })
+
+        if kwargs['batch_norm']:
+            self.clf.update({'batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
+        if kwargs['act'] == 'l_relu':
+            self.clf.update({'act': nn.LeakyReLU()})
+        else:
+            self.clf.update({'act': nn.ReLU()})
+        self.clf.update({'l_f': nn.Linear(kwargs['l_out'], kwargs['n_class'])})
+
+    def forward(self, x):
+        for key, module in self.clf.items():
+            x = module(x)
+        return x
