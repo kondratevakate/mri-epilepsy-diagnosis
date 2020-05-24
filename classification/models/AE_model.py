@@ -6,20 +6,41 @@ class DownBlock(nn.Module):
         super(DownBlock, self).__init__()
         self.skip = skip
         self.block = nn.ModuleDict({
-            'conv': nn.Conv3d(in_channels=c_in,
+            'convx': nn.Conv3d(in_channels=c_in,
                               out_channels=c_out,
-                              kernel_size=kwargs['conv_k'],
-                              stride=kwargs['conv_s'],
-                              padding=kwargs['conv_pad'],
-                              ),
+                              kernel_size=(kwargs['conv_k'], 1, 1),
+                              stride=(kwargs['conv_s'],1,1),
+                              padding=(kwargs['conv_pad'],0,0),
+                          ),
+            'convy': nn.Conv3d(in_channels=c_out,
+                              out_channels=c_out,
+                              kernel_size=(1, kwargs['conv_k'], 1),
+                              stride=(1,kwargs['conv_s'],1),
+                              padding=(0,kwargs['conv_pad'],0),
+                          ),
+            'convz': nn.Conv3d(in_channels=c_out,
+                              out_channels=c_out,
+                              kernel_size=(1, 1, kwargs['conv_k']),
+                              stride=(1,1,kwargs['conv_s']),
+                              padding=(0,0,kwargs['conv_pad']),
+                          ),
             'pooling': nn.MaxPool3d(kernel_size=kwargs['maxpool_k'], stride=kwargs['maxpool_s'])
         })
         if kwargs['batch_norm']:
             self.block.update({'batch_norm': nn.BatchNorm3d(c_out)})
         if kwargs['act'] == 'l_relu':
             self.block.update({'act': nn.LeakyReLU()})
+            self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
         else:  ##elif
             self.block.update({'act': nn.ReLU()})
+            self.init_gain = nn.init.calculate_gain('relu')
+        self.init_weights()
+        
+    def init_weights(self):
+        for _, m in self.block.items():
+            if hasattr(m, 'weight') and m.weight.dim() > 1:
+                nn.init.xavier_uniform_(m.weight.data, gain=self.init_gain)
+                nn.init.constant_(m.bias.data, 0)
 
     def forward(self, x):
 #         x_before_pool = None
@@ -50,18 +71,41 @@ class UpBlock(nn.Module):
                 scale_factor=kwargs['scale'],
                 mode=kwargs['scale_mode'],
             )})
-        self.block.update({'conv': nn.Conv3d(in_channels=c_in,
+        self.block.update({'convx': nn.Conv3d(in_channels=c_in,
                                              out_channels=c_out,
-                                             kernel_size=kwargs['conv_k'],
-                                             stride=kwargs['conv_s'],
-                                             padding=kwargs['conv_pad'],
-                                             )})
+                                             kernel_size=(kwargs['conv_k'],1,1),
+                                             stride=(kwargs['conv_s'],1,1),
+                                             padding=(kwargs['conv_pad'],0,0),
+                                             ),
+                           'convy': nn.Conv3d(in_channels=c_out,
+                                             out_channels=c_out,
+                                             kernel_size=(1,kwargs['conv_k'],1),
+                                             stride=(1,kwargs['conv_s'],1),
+                                             padding=(0,kwargs['conv_pad'],0),
+                                             ),
+                           'convz': nn.Conv3d(in_channels=c_out,
+                                             out_channels=c_out,
+                                             kernel_size=(1,1,kwargs['conv_k']),
+                                             stride=(1,1,kwargs['conv_s']),
+                                             padding=(0,0,kwargs['conv_pad']),
+                                             ),
+                          })
         if kwargs['batch_norm']:
             self.block.update({'batch_norm': nn.BatchNorm3d(c_out)})
         if kwargs['act'] == 'l_relu':
             self.block.update({'act': nn.LeakyReLU()})
-        else:  ##elif
+            self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
+        else:  
             self.block.update({'act': nn.ReLU()})
+            self.init_gain = nn.init.calculate_gain('relu')
+        self.init_weights()
+        
+    def init_weights(self):
+        for key, m in self.block.items():
+            if hasattr(m, 'weight') and m.weight.dim() > 1:
+                nn.init.xavier_uniform_(m.weight.data, gain=self.init_gain)
+                nn.init.constant_(m.bias.data, 0)
+
 
     def forward(self, x, shape_before_pool=None, x_before_pool=None):
         for key, module in self.block.items():
@@ -180,9 +224,19 @@ class Discriminator(nn.Module):
             self.disc.update({'batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
         if kwargs['act'] == 'l_relu':
             self.disc.update({'act': nn.LeakyReLU()})
+            self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
         else:
             self.disc.update({'act': nn.ReLU()})
+            self.init_gain = nn.init.calculate_gain('relu')
         self.disc.update({'l_f': nn.Linear(kwargs['l_out'], kwargs['n_domains'])})
+        
+        self.init_weights()
+        
+    def init_weights(self):
+        for key, m in self.disc.items():
+            if hasattr(m, 'weight') and m.weight.dim() > 1:
+                nn.init.xavier_uniform_(m.weight.data, gain=self.init_gain)
+                nn.init.constant_(m.bias.data, 0)
 
     def forward(self, x):
         for key, module in self.disc.items():
@@ -207,9 +261,19 @@ class Classificator(nn.Module):
             self.clf.update({'batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
         if kwargs['act'] == 'l_relu':
             self.clf.update({'act': nn.LeakyReLU()})
+            self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
         else:
             self.clf.update({'act': nn.ReLU()})
+            self.init_gain = nn.init.calculate_gain('relu')
         self.clf.update({'l_f': nn.Linear(kwargs['l_out'], kwargs['n_class'])})
+        
+        self.init_weights()
+        
+    def init_weights(self):
+        for key, m in self.clf.items():
+            if hasattr(m, 'weight') and m.weight.dim() > 1:
+                nn.init.xavier_uniform_(m.weight.data, gain=self.init_gain)
+                nn.init.constant_(m.bias.data, 0)
 
     def forward(self, x):
         for key, module in self.clf.items():
