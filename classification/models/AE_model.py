@@ -6,33 +6,33 @@ class DownBlock(nn.Module):
         super(DownBlock, self).__init__()
         self.skip = skip
         self.block = nn.ModuleDict({
-            'convx': nn.Conv3d(in_channels=c_in,
+            '1_convx': nn.Conv3d(in_channels=c_in,
                               out_channels=c_out,
                               kernel_size=(kwargs['conv_k'], 1, 1),
                               stride=(kwargs['conv_s'],1,1),
                               padding=(kwargs['conv_pad'],0,0),
                           ),
-            'convy': nn.Conv3d(in_channels=c_out,
+            '2_convy': nn.Conv3d(in_channels=c_out,
                               out_channels=c_out,
                               kernel_size=(1, kwargs['conv_k'], 1),
                               stride=(1,kwargs['conv_s'],1),
                               padding=(0,kwargs['conv_pad'],0),
                           ),
-            'convz': nn.Conv3d(in_channels=c_out,
+            '3_convz': nn.Conv3d(in_channels=c_out,
                               out_channels=c_out,
                               kernel_size=(1, 1, kwargs['conv_k']),
                               stride=(1,1,kwargs['conv_s']),
                               padding=(0,0,kwargs['conv_pad']),
                           ),
-            'pooling': nn.MaxPool3d(kernel_size=kwargs['maxpool_k'], stride=kwargs['maxpool_s'])
+            '4_pooling': nn.MaxPool3d(kernel_size=kwargs['maxpool_k'], stride=kwargs['maxpool_s'])
         })
         if kwargs['batch_norm']:
-            self.block.update({'batch_norm': nn.BatchNorm3d(c_out)})
+            self.block.update({'5_batch_norm': nn.BatchNorm3d(c_out)})
         if kwargs['act'] == 'l_relu':
-            self.block.update({'act': nn.LeakyReLU()})
+            self.block.update({'6_act': nn.LeakyReLU()})
             self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
         else:  ##elif
-            self.block.update({'act': nn.ReLU()})
+            self.block.update({'6_act': nn.ReLU()})
             self.init_gain = nn.init.calculate_gain('relu')
         self.init_weights()
         
@@ -46,7 +46,7 @@ class DownBlock(nn.Module):
 #         x_before_pool = None
         _,_,D,H,W = x.shape
         shape_before_pool = (D,H,W) #if not even size
-        for key, module in self.block.items():
+        for key, module in sorted(self.block.items()):
             #             if key == 'poolig' and self.skip == True: # if use skip conection
             #                 x_before_pool = x
             x = module(x)
@@ -59,7 +59,7 @@ class UpBlock(nn.Module):
         self.skip = skip
         self.block = nn.ModuleDict()
         if kwargs['up'] == 'transpose_conv':
-            self.block.update({'upsample': nn.ConvTranspose3d(
+            self.block.update({'1_upsample': nn.ConvTranspose3d(
                 in_channels=c_in,
                 out_channels=c_out,
                 kernel_size=kwargs['scale'],
@@ -67,23 +67,23 @@ class UpBlock(nn.Module):
                 padding=kwargs['t_conv_pad'],
             )})
         else:
-            self.block.update({'upsample': nn.Upsample(
+            self.block.update({'1_upsample': nn.Upsample(
                 scale_factor=kwargs['scale'],
                 mode=kwargs['scale_mode'],
             )})
-        self.block.update({'convx': nn.Conv3d(in_channels=c_in,
+        self.block.update({'2_convx': nn.Conv3d(in_channels=c_in,
                                              out_channels=c_out,
                                              kernel_size=(kwargs['conv_k'],1,1),
                                              stride=(kwargs['conv_s'],1,1),
                                              padding=(kwargs['conv_pad'],0,0),
                                              ),
-                           'convy': nn.Conv3d(in_channels=c_out,
+                           '3_convy': nn.Conv3d(in_channels=c_out,
                                              out_channels=c_out,
                                              kernel_size=(1,kwargs['conv_k'],1),
                                              stride=(1,kwargs['conv_s'],1),
                                              padding=(0,kwargs['conv_pad'],0),
                                              ),
-                           'convz': nn.Conv3d(in_channels=c_out,
+                           '4_convz': nn.Conv3d(in_channels=c_out,
                                              out_channels=c_out,
                                              kernel_size=(1,1,kwargs['conv_k']),
                                              stride=(1,1,kwargs['conv_s']),
@@ -91,31 +91,31 @@ class UpBlock(nn.Module):
                                              ),
                           })
         if kwargs['batch_norm']:
-            self.block.update({'batch_norm': nn.BatchNorm3d(c_out)})
+            self.block.update({'5_batch_norm': nn.BatchNorm3d(c_out)})
         if kwargs['act'] == 'l_relu':
-            self.block.update({'act': nn.LeakyReLU()})
+            self.block.update({'6_act': nn.LeakyReLU()})
             self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
         else:  
-            self.block.update({'act': nn.ReLU()})
+            self.block.update({'6_act': nn.ReLU()})
             self.init_gain = nn.init.calculate_gain('relu')
         self.init_weights()
         
     def init_weights(self):
-        for key, m in self.block.items():
+        for _, m in self.block.items():
             if hasattr(m, 'weight') and m.weight.dim() > 1:
                 nn.init.xavier_uniform_(m.weight.data, gain=self.init_gain)
                 nn.init.constant_(m.bias.data, 0)
 
 
     def forward(self, x, shape_before_pool=None, x_before_pool=None):
-        for key, module in self.block.items():
+        for key, module in sorted(self.block.items()):
             #             if key == 'conv' and self.skip == True: # if use skip conection
             #                 assert x_before_pool == None, 'wrang skip_map'
             #                 x = torch.cat([x, x_before_pool], dim=1)
             x = module(x)
-            if key =='up' and (shape_before_pool[0] > x.shape[1] or 
-                               shape_before_pool[1] > x.shape[2] or 
-                               shape_before_pool[2] > x.shape[3]): #not even size
+            if key =='1_upsample' and (shape_before_pool[0] > x.shape[2] or 
+                               shape_before_pool[1] > x.shape[3] or 
+                               shape_before_pool[2] > x.shape[4]): #not even size
                 x = F.interpolate(x,(shape_before_pool[0],shape_before_pool[1], shape_before_pool[2]))
         return x
 
@@ -210,25 +210,25 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         self.disc = nn.ModuleDict({
-            'conv': nn.Conv3d(in_channels=kwargs['c_in'],
+            '1_conv': nn.Conv3d(in_channels=kwargs['c_in'],
                               out_channels=kwargs['c_out'],
                               kernel_size=kwargs['conv_k'],
                               stride=kwargs['conv_s'],
                               padding=kwargs['conv_pad'],
                               ),
-            'flat': nn.Flatten(),
-            'l1': nn.Linear(kwargs['l_in'], kwargs['l_out'])
+            '2_flat': nn.Flatten(),
+            '3_l1': nn.Linear(kwargs['l_in'], kwargs['l_out'])
         })
 
         if kwargs['batch_norm']:
-            self.disc.update({'batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
+            self.disc.update({'4_batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
         if kwargs['act'] == 'l_relu':
-            self.disc.update({'act': nn.LeakyReLU()})
+            self.disc.update({'5_act': nn.LeakyReLU()})
             self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
         else:
-            self.disc.update({'act': nn.ReLU()})
+            self.disc.update({'5_act': nn.ReLU()})
             self.init_gain = nn.init.calculate_gain('relu')
-        self.disc.update({'l_f': nn.Linear(kwargs['l_out'], kwargs['n_domains'])})
+        self.disc.update({'6_l_f': nn.Linear(kwargs['l_out'], kwargs['n_domains'])})
         
         self.init_weights()
         
@@ -239,7 +239,7 @@ class Discriminator(nn.Module):
                 nn.init.constant_(m.bias.data, 0)
 
     def forward(self, x):
-        for key, module in self.disc.items():
+        for key, module in sorted(self.disc.items()):
             x = module(x)
         return x
 
@@ -247,25 +247,25 @@ class Classificator(nn.Module):
     def __init__(self, **kwargs):
         super(Classificator, self).__init__()
         self.clf = nn.ModuleDict({
-            'conv': nn.Conv3d(in_channels=kwargs['c_in'],
+            '1_conv': nn.Conv3d(in_channels=kwargs['c_in'],
                               out_channels=kwargs['c_out'],
                               kernel_size=kwargs['conv_k'],
                               stride=kwargs['conv_s'],
                               padding=kwargs['conv_pad'],
                               ),
-            'flat': nn.Flatten(),
-            'l1': nn.Linear(kwargs['l_in'], kwargs['l_out'])
+            '2_flat': nn.Flatten(),
+            '3_l1': nn.Linear(kwargs['l_in'], kwargs['l_out'])
         })
 
         if kwargs['batch_norm']:
-            self.clf.update({'batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
+            self.clf.update({'4_batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
         if kwargs['act'] == 'l_relu':
-            self.clf.update({'act': nn.LeakyReLU()})
+            self.clf.update({'5_act': nn.LeakyReLU()})
             self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
         else:
-            self.clf.update({'act': nn.ReLU()})
+            self.clf.update({'5_act': nn.ReLU()})
             self.init_gain = nn.init.calculate_gain('relu')
-        self.clf.update({'l_f': nn.Linear(kwargs['l_out'], kwargs['n_class'])})
+        self.clf.update({'6_l_f': nn.Linear(kwargs['l_out'], kwargs['n_class'])})
         
         self.init_weights()
         
@@ -276,6 +276,6 @@ class Classificator(nn.Module):
                 nn.init.constant_(m.bias.data, 0)
 
     def forward(self, x):
-        for key, module in self.clf.items():
+        for key, module in sorted(self.clf.items()):
             x = module(x)
         return x
