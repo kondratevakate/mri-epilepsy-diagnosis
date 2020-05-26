@@ -54,7 +54,7 @@ def get_iou_score(prediction, ground_truth):
     iou_score = float(intersection) / union
     return iou_score
 
-def get_dice_score(output, target, epsilon=1e-9):
+def get_dice_score(output, target, SPATIAL_DIMENSIONS = (2, 3, 4), epsilon=1e-9):
     p0 = output
     g0 = target
     p1 = 1 - p0
@@ -76,32 +76,31 @@ def forward(model, inputs):
         logits = model(inputs)
     return logits
 
-def get_model_and_optimizer(device):
+def get_model_and_optimizer(num_encoding_blocks=3,out_channels_first_layer=8, device):
+    
+    # reproducibility
+    torch.manual_seed(0)
+    np.random.seed(0)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
     model = UNet(
         in_channels=1,
         out_classes=2,
         dimensions=3,
-        num_encoding_blocks=3,
-        out_channels_first_layer=8,
+        num_encoding_blocks=num_encoding_blocks,
+        out_channels_first_layer=out_channels_first_layer,
         normalization='batch',
         upsampling_type='linear',
         padding=True,
         activation='PReLU',
     ).to(device)
+    
     optimizer = torch.optim.AdamW(model.parameters())
-    return model, optimizer
-
-
-def train(num_epochs, training_loader, validation_loader, model, optimizer, weights_stem, experiment= False):
-    run_epoch(0, Action.VALIDATE, validation_loader, model, optimizer, experiment)
-    for epoch_idx in range(1, num_epochs + 1):
-        print('Starting epoch', epoch_idx)
-        run_epoch(epoch_idx, Action.TRAIN, training_loader, model, optimizer, experiment)
-        run_epoch(epoch_idx, Action.VALIDATE, validation_loader, model, optimizer, experiment)
-        if experiment:
-            experiment.log_epoch_end(epoch_idx)
-        torch.save(model.state_dict(), f'weights/{weights_stem}_epoch_{epoch_idx}.pth')
-        
+    scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=5, gamma=0.7)
+    
+    return model, optimizer, scheduler
+      
         
 def run_epoch(epoch_idx, action, loader, model, optimizer, experiment= False):
     is_training = action == Action.TRAIN
@@ -128,4 +127,13 @@ def run_epoch(epoch_idx, action, loader, model, optimizer, experiment= False):
     epoch_losses = np.array(epoch_losses)
     print(f'{action.value} mean loss: {epoch_losses.mean():0.3f}')
 
-        
+def train(num_epochs, training_loader, validation_loader, model, optimizer, weights_stem, experiment= False):
+    run_epoch(0, Action.VALIDATE, validation_loader, model, optimizer, experiment)
+    for epoch_idx in range(1, num_epochs + 1):
+        print('Starting epoch', epoch_idx)
+        run_epoch(epoch_idx, Action.TRAIN, training_loader, model, optimizer, experiment)
+        run_epoch(epoch_idx, Action.VALIDATE, validation_loader, model, optimizer, experiment)
+    
+        if experiment:
+            experiment.log_epoch_end(epoch_idx)
+        torch.save(model.state_dict(), f'weights/{weights_stem}_epoch_{epoch_idx}.pth')

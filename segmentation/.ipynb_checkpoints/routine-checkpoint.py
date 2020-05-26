@@ -76,33 +76,33 @@ def forward(model, inputs):
         logits = model(inputs)
     return logits
 
-def get_model_and_optimizer(device):
+def get_model_and_optimizer(num_encoding_blocks=3,out_channels_first_layer=8, device):
+    
+    # reproducibility
+    torch.manual_seed(0)
+    np.random.seed(0)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
     model = UNet(
         in_channels=1,
         out_classes=2,
         dimensions=3,
-        num_encoding_blocks=3,
-        out_channels_first_layer=8,
+        num_encoding_blocks=num_encoding_blocks,
+        out_channels_first_layer=out_channels_first_layer,
         normalization='batch',
         upsampling_type='linear',
         padding=True,
         activation='PReLU',
     ).to(device)
+    
     optimizer = torch.optim.AdamW(model.parameters())
-    return model, optimizer
-
-
-def train(num_epochs, training_loader, validation_loader, model, optimizer, weights_stem, experiment):
-    run_epoch(0, Action.VALIDATE, validation_loader, model, optimizer, experiment)
-    for epoch_idx in range(1, num_epochs + 1):
-        print('Starting epoch', epoch_idx)
-        run_epoch(epoch_idx, Action.TRAIN, training_loader, model, optimizer, experiment)
-        run_epoch(epoch_idx, Action.VALIDATE, validation_loader, model, optimizer, experiment)
-        experiment.log_epoch_end(epoch_idx)
-        torch.save(model.state_dict(), f'weights/{weights_stem}_epoch_{epoch_idx}.pth')
+    scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=5, gamma=0.7)
+    
+    return model, optimizer, scheduler
+      
         
-        
-def run_epoch(epoch_idx, action, loader, model, optimizer, experiment):
+def run_epoch(epoch_idx, action, loader, model, optimizer, experiment= False):
     is_training = action == Action.TRAIN
     epoch_losses = []
     model.train(is_training)
@@ -118,11 +118,22 @@ def run_epoch(epoch_idx, action, loader, model, optimizer, experiment):
                 batch_loss.backward()
                 optimizer.step()
             epoch_losses.append(batch_loss.item())
-            if action == Action.TRAIN:
-                experiment.log_metric("train_dice_loss", batch_loss.item())
-            elif action == Action.VALIDATE:
-                experiment.log_metric("validate_dice_loss", batch_loss.item())
+           
+            if experiment:
+                if action == Action.TRAIN:
+                    experiment.log_metric("train_dice_loss", batch_loss.item())
+                elif action == Action.VALIDATE:
+                    experiment.log_metric("validate_dice_loss", batch_loss.item())
     epoch_losses = np.array(epoch_losses)
     print(f'{action.value} mean loss: {epoch_losses.mean():0.3f}')
 
-        
+def train(num_epochs, training_loader, validation_loader, model, optimizer, weights_stem, experiment= False):
+    run_epoch(0, Action.VALIDATE, validation_loader, model, optimizer, experiment)
+    for epoch_idx in range(1, num_epochs + 1):
+        print('Starting epoch', epoch_idx)
+        run_epoch(epoch_idx, Action.TRAIN, training_loader, model, optimizer, experiment)
+        run_epoch(epoch_idx, Action.VALIDATE, validation_loader, model, optimizer, experiment)
+    
+        if experiment:
+            experiment.log_epoch_end(epoch_idx)
+        torch.save(model.state_dict(), f'weights/{weights_stem}_epoch_{epoch_idx}.pth')
