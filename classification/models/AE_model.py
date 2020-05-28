@@ -157,11 +157,16 @@ class Decoder(nn.Module):
                         ))
         if kwargs['reduce_size']:
             self.decode.append(nn.ConvTranspose3d(1, 1, kernel_size=4, stride=4, padding=0))
-
+        self.vox = nn.Conv3d(in_channels=1, out_channels= 1,
+                                             kernel_size= 3,
+                                             stride= 1,
+                                             padding=1,
+                                             )
     def forward(self, x, size_list):
         size_list.reverse()
         for i, module in enumerate(self.decode):
             x = module(x, size_list[i])
+        x = self.vox(x)
         return x
 
 
@@ -210,25 +215,38 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         self.disc = nn.ModuleDict({
-            '1_conv': nn.Conv3d(in_channels=kwargs['c_in'],
+            '1_convx': nn.Conv3d(in_channels=kwargs['c_in'],
                               out_channels=kwargs['c_out'],
-                              kernel_size=kwargs['conv_k'],
-                              stride=kwargs['conv_s'],
-                              padding=kwargs['conv_pad'],
-                              ),
-            '2_flat': nn.Flatten(),
-            '3_l1': nn.Linear(kwargs['l_in'], kwargs['l_out'])
+                              kernel_size=(kwargs['conv_k'], 1, 1),
+                              stride=(kwargs['conv_s'],1,1),
+                              padding=(kwargs['conv_pad'],0,0),
+                          ),
+            '2_convy': nn.Conv3d(in_channels=kwargs['c_out'],
+                              out_channels=kwargs['c_out'],
+                              kernel_size=(1, kwargs['conv_k'], 1),
+                              stride=(1,kwargs['conv_s'],1),
+                              padding=(0,kwargs['conv_pad'],0),
+                          ),
+            '3_convz': nn.Conv3d(in_channels=kwargs['c_out'],
+                              out_channels=kwargs['c_out'],
+                              kernel_size=(1, 1, kwargs['conv_k']),
+                              stride=(1,1,kwargs['conv_s']),
+                              padding=(0,0,kwargs['conv_pad']),
+                          ),
+            '4_flat': nn.Flatten(),
+            '5_l1': nn.Linear(kwargs['l_in'], kwargs['l_out'])
         })
 
         if kwargs['batch_norm']:
-            self.disc.update({'4_batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
+            self.disc.update({'6_batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
         if kwargs['act'] == 'l_relu':
-            self.disc.update({'5_act': nn.LeakyReLU()})
+            self.disc.update({'7_act': nn.LeakyReLU()})
             self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
         else:
-            self.disc.update({'5_act': nn.ReLU()})
+            self.disc.update({'7_act': nn.ReLU()})
             self.init_gain = nn.init.calculate_gain('relu')
-        self.disc.update({'6_l_f': nn.Linear(kwargs['l_out'], kwargs['n_domains'])})
+        self.disc.update({'8_drop': nn.Dropout(kwargs['p_drop'])})
+        self.disc.update({'9_l_f': nn.Linear(kwargs['l_out'], kwargs['n_domains'])})
         
         self.init_weights()
         
@@ -247,25 +265,38 @@ class Classificator(nn.Module):
     def __init__(self, **kwargs):
         super(Classificator, self).__init__()
         self.clf = nn.ModuleDict({
-            '1_conv': nn.Conv3d(in_channels=kwargs['c_in'],
+            '1_convx': nn.Conv3d(in_channels=kwargs['c_in'],
                               out_channels=kwargs['c_out'],
-                              kernel_size=kwargs['conv_k'],
-                              stride=kwargs['conv_s'],
-                              padding=kwargs['conv_pad'],
-                              ),
-            '2_flat': nn.Flatten(),
-            '3_l1': nn.Linear(kwargs['l_in'], kwargs['l_out'])
+                              kernel_size=(kwargs['conv_k'], 1, 1),
+                              stride=(kwargs['conv_s'],1,1),
+                              padding=(kwargs['conv_pad'],0,0),
+                          ),
+            '2_convy': nn.Conv3d(in_channels=kwargs['c_out'],
+                              out_channels=kwargs['c_out'],
+                              kernel_size=(1, kwargs['conv_k'], 1),
+                              stride=(1,kwargs['conv_s'],1),
+                              padding=(0,kwargs['conv_pad'],0),
+                          ),
+            '3_convz': nn.Conv3d(in_channels=kwargs['c_out'],
+                              out_channels=kwargs['c_out'],
+                              kernel_size=(1, 1, kwargs['conv_k']),
+                              stride=(1,1,kwargs['conv_s']),
+                              padding=(0,0,kwargs['conv_pad']),
+                          ),
+            '4_flat': nn.Flatten(),
+            '5_l1': nn.Linear(kwargs['l_in'], kwargs['l_out'])
         })
 
         if kwargs['batch_norm']:
-            self.clf.update({'4_batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
+            self.clf.update({'6_batch_norm': nn.BatchNorm1d(kwargs['l_out'])})
         if kwargs['act'] == 'l_relu':
-            self.clf.update({'5_act': nn.LeakyReLU()})
+            self.clf.update({'7_act': nn.LeakyReLU()})
             self.init_gain = nn.init.calculate_gain('leaky_relu', 0.01)
         else:
-            self.clf.update({'5_act': nn.ReLU()})
+            self.clf.update({'7_act': nn.ReLU()})
             self.init_gain = nn.init.calculate_gain('relu')
-        self.clf.update({'6_l_f': nn.Linear(kwargs['l_out'], kwargs['n_class'])})
+        self.clf.update({'8_drop': nn.Dropout(kwargs['p_drop'])})
+        self.clf.update({'9_l_f': nn.Linear(kwargs['l_out'], kwargs['n_class'])})
         
         self.init_weights()
         
