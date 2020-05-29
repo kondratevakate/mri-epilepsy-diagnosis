@@ -62,6 +62,8 @@ def targets_complete(sample,
     files['patient']= targets['patient'][clause].copy()
     files['fcd'] = targets['fcd'][clause].copy()
     files['scan'] = targets['scan'][clause].copy()
+    files['detection'] = targets['detection'][clause].copy()
+    files['comments'] = targets['comments'][clause].copy()
     
     if mask_path:
         files['img_mask'] = ''
@@ -70,6 +72,8 @@ def targets_complete(sample,
         files['patient']= targets['patient'].copy()
         files['fcd'] = targets['fcd'].copy()
         files['scan'] = targets['scan'].copy()   
+        files['detection'] = targets['detection'].copy()
+        files['comments'] = targets['comments'].copy()
                 
     for i in tqdm(range(len(files))):
         for file_in_folder in glob.glob(os.path.join(image_path,'*norm*')):
@@ -142,6 +146,8 @@ class MriSegmentation(data.Dataset):
         self.scan = files['scan']
         self.scan_keys = le.classes_
         self.target = files['fcd'] 
+        self.detection = files['detection']
+        self.misc = files['comments']
         
         if mask_path:
             self.img_mask = files['img_mask']
@@ -223,6 +229,8 @@ class MriClassification(data.Dataset):
         self.scan = files['scan']
         self.scan_keys = le.classes_
         self.target = files['fcd'] 
+        self.detection = files['detection']
+        self.misc = files['comments']
            
         self.coord_min = coord_min
         self.img_shape = img_shape

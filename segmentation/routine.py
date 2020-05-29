@@ -21,6 +21,7 @@ from torch import optim
 import multiprocessing
 
 from IPython.display import clear_output
+import matplotlib.pyplot as plt
 from sklearn.model_selection import StratifiedKFold, ShuffleSplit
 
 import torchio
@@ -169,7 +170,7 @@ def prepare_batch(batch, device):
     inputs = batch[MRI][DATA].to(device)
     targets = batch[LABEL][DATA]
     targets[targets < 1000] = 0
-    targets[targets > 1000] = 1
+    targets[targets >= 1000] = 1
     targets = targets.to(device)    
     return inputs, targets
 
