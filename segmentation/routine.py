@@ -205,7 +205,7 @@ def forward(model, inputs):
         logits = model(inputs)
     return logits
 
-def run_epoch(epoch_idx, action, loader, model, optimizer, scheduler, experiment= False):
+def run_epoch(epoch_idx, action, loader, model, optimizer, scheduler=False, experiment= False):
     is_training = action == Action.TRAIN
     epoch_losses = []
     model.train(is_training)
@@ -223,7 +223,6 @@ def run_epoch(epoch_idx, action, loader, model, optimizer, scheduler, experiment
             if is_training:
                 batch_loss.backward()
                 optimizer.step()
-                scheduler.step()
                 
             # appending the loss
             epoch_losses.append(batch_loss.item())
@@ -242,7 +241,7 @@ def run_epoch(epoch_idx, action, loader, model, optimizer, scheduler, experiment
     return epoch_losses 
 
 def train(num_epochs, training_loader, validation_loader, model, optimizer, scheduler,
-          weights_stem, save_epoch= 2, experiment= False, verbose = True):
+          weights_stem, save_epoch= 1, experiment= False, verbose = True):
     
     start_time = time.time()
     epoch_train_loss, epoch_val_loss = [], []
@@ -252,7 +251,7 @@ def train(num_epochs, training_loader, validation_loader, model, optimizer, sche
     for epoch_idx in range(1, num_epochs + 1):
         
         epoch_train_losses = run_epoch(epoch_idx, Action.TRAIN, training_loader, 
-                                       model, optimizer,scheduler, experiment)
+                                       model, optimizer, scheduler, experiment)
         epoch_val_losses = run_epoch(epoch_idx, Action.VALIDATE, validation_loader, 
                                      model, optimizer, scheduler, experiment)
         
@@ -275,13 +274,15 @@ def train(num_epochs, training_loader, validation_loader, model, optimizer, sche
             plt.ylabel('loss')
             plt.legend()
             plt.show()
-    
+        
+        if scheduler:     
+            scheduler.step(np.mean(epoch_val_losses))
         if experiment:
             experiment.log_epoch_end(epoch_idx)
         if (epoch_idx% save_epoch == 0):
             torch.save(model.state_dict(), f'weights/{weights_stem}_epoch_{epoch_idx}.pth')
             
-def get_model_and_optimizer(device, num_encoding_blocks=3, out_channels_first_layer=8, step_size=3):
+def get_model_and_optimizer(device, num_encoding_blocks=3, out_channels_first_layer=8, patience=3):
     
     # reproducibility
     torch.manual_seed(0)
@@ -302,6 +303,7 @@ def get_model_and_optimizer(device, num_encoding_blocks=3, out_channels_first_la
     ).to(device)
     
     optimizer = torch.optim.AdamW(model.parameters())
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.7)
+#     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.7)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=patience, threshold=0.01)
     
     return model, optimizer, scheduler
