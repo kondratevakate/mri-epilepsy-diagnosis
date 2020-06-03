@@ -32,7 +32,7 @@ def run_one_epoch(model, loader, criterion, train, device,
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            scheduler.step()
+            scheduler.step(loss)
                     
         losses.append(loss.data.cpu().numpy())
         probs.extend(F.softmax(outputs, dim=-1).cpu().data.numpy()[:, 1])
@@ -121,31 +121,31 @@ def train(model, optimizer, scheduler, train_dataloader, val_dataloader, device,
             axes[1].legend()
             plt.show()
         
-        # 5. Early stopping, best metrics, save model
-#         if val_dataloader is not None and epoch_val_metric[-1] > best_metric:
-#             patience = 0
-#             best_metric = epoch_val_metric[-1]
-#             last_train_metric, last_val_metric = epoch_train_metric[-1], epoch_val_metric[-1]
-#             last_train_loss, last_val_loss = epoch_train_loss[-1], epoch_val_loss[-1]
-#             if model_save_path is not None:
-#                     torch.save(model.state_dict(), model_save_path)
+#         5. Early stopping, best metrics, save model
+        if val_dataloader is not None and epoch_val_metric[-1] > best_metric:
+            patience_ = 0
+            best_metric = epoch_val_metric[-1]
+            last_train_metric, last_val_metric = epoch_train_metric[-1], epoch_val_metric[-1]
+            last_train_loss, last_val_loss = epoch_train_loss[-1], epoch_val_loss[-1]
+            if model_save_path is not None:
+                    torch.save(model.state_dict(), model_save_path)
                     
-#         elif val_dataloader is None and epoch_train_metric[-1] >= best_metric:
-#             patience = 0
-#             best_metric = epoch_train_metric[-1]
-#             last_train_metric = epoch_train_metric[-1]
-#             last_train_loss = epoch_train_loss[-1]
-#             if model_save_path is not None:
-#                 torch.save(model.state_dict(), model_save_path)
-#         else:
-#             patience += 1
+        elif val_dataloader is None and epoch_train_metric[-1] >= best_metric:
+            patience = 0
+            best_metric = epoch_train_metric[-1]
+            last_train_metric = epoch_train_metric[-1]
+            last_train_loss = epoch_train_loss[-1]
+            if model_save_path is not None:
+                torch.save(model.state_dict(), model_save_path)
+        else:
+            patience_ += 1
 
-#         if patience >= max_patience:
-#             print("Early stopping! Patience is out.")
-#             break
-#         if epoch_train_loss[-1] < eps:
-#             print("Early stopping! Train loss < eps.")
-#             break
+        if patience_ >= max_patience:
+            print("Early stopping! Patience is out.")
+            break
+        if epoch_train_loss[-1] < eps:
+            print("Early stopping! Train loss < eps.")
+            break
 
         last_train_metric = epoch_train_metric[-1]
         last_train_loss = epoch_train_loss[-1]
@@ -178,7 +178,7 @@ def stratified_batch_indices(indices, labels):
     assert len(result) == len(indices)
     return result
 
-def cross_val_score(cnn_model, train_dataset, cv, device, metric, 
+def cross_val_score(cnn_model, train_dataset, cv, device, metric, holdout_idx,
                     model_load_path=None, batch_size=10, val_dataset=None, transfer=False, 
                     finetune=False, experiment = False, max_epoch=20):
     
@@ -190,7 +190,8 @@ def cross_val_score(cnn_model, train_dataset, cv, device, metric,
         val_dataset = train_dataset
         use_rest = False
 
-    cv_splits = list(cv.split(X=np.arange(len(train_dataset)), y=train_dataset.target))
+#     cv_splits = list(cv.split(X=np.arange(len(train_dataset)), y=train_dataset.target))
+    cv_splits = list(cv.split(X=np.arange(len(holdout_idx)), y=train_dataset.target[holdout_idx.index]))
     val_metrics = []
 
     for i in range(len(cv_splits)):
@@ -217,32 +218,33 @@ def cross_val_score(cnn_model, train_dataset, cv, device, metric,
 
         eps = 1e-2 if use_rest else 3e-3
         model, optimizer, scheduler = create_model_opt(cnn_model)
-        
-        _, _, _, last_val_metric = train(model, optimizer, scheduler,
+        if model_load_path is None or transfer or finetune:
+            _, _, _, last_val_metric = train(model, optimizer, scheduler,
                                          train_loader, val_loader, device,
                                         metric=metric, 
                                         verbose=1,  
                                         max_epoch=max_epoch,
                                         eps=eps,
-                                        experiment=experiment)
-        
-        val_metrics.append(last_val_metric)
+                                        experiment=experiment,
+                                        model_save_path = 'checkpoint_1.pth')
+            val_metrics.append(last_val_metric)
                 
         if model_load_path:  # no train, just validation
-            model, optimizer = create_model_opt(model_load_path, transfer=False)
+            model, optimizer, scheduler = create_model_opt(cnn_model, model_load_path = model_load_path, transfer=False)
             criterion = nn.CrossEntropyLoss()
             with torch.no_grad():
                 val_losses, val_probs, val_targets = run_one_epoch(
                     model, val_loader, criterion, False, device, scheduler)
             val_metric = metric(val_targets, val_probs)
             val_metrics.append(val_metric)
-            
-        del train_loader, val_loader, model, optimizer, scheduler
+        if model_load_path is None:
+            del train_loader
+        del  val_loader, model, optimizer, scheduler
 
     return val_metrics
 
 def create_model_opt(model, model_load_path=None, 
-                     input_shape = (192,192,192), n_fc_units = 192, transfer=False, lr=1e-5):
+                     input_shape = (192,192,192), n_fc_units = 192, transfer=False, lr=1e-5, patience = 2):
     # reproducibility
     torch.manual_seed(0)
     np.random.seed(0)
@@ -259,10 +261,12 @@ def create_model_opt(model, model_load_path=None,
         modules = list(list(model.children())[0].children())[:-1] + [last]
         model = torch.nn.Sequential(torch.nn.Sequential(*modules))
         
-        opt = torch.optim.Adam(last.parameters(), lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=50, gamma=0.7)
+        opt = torch.optim.Adam(last.parameters(), lr, weight_decay = 0.01)
+#         scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=50, gamma=0.7)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=patience, threshold=0.001)
     else:
-        opt = torch.optim.Adam(model.parameters(), lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=50, gamma=0.7)
+        opt = torch.optim.Adam(model.parameters(), lr,weight_decay = 0.01)
+#         scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=50, gamma=0.7)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=patience, threshold=0.001)
         
     return model, opt, scheduler
