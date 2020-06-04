@@ -3,4 +3,18 @@
 
 The current project is devoted to the Focal Cortical Displasia detection on MRI T1w images.
 
-Here we code as gods :fire:
+Focal cortical dysplasia (FCD) is one of the most common epileptogenic lesions associatedwith malformations of cortical development. The findings on magnetic resonance (MR) images areessential for diagnostics and surgical planning in patients with epilepsy. The accurate detection ofthe FCD relies on the radiologist professionalism, and in many cases, the lesion could be missed. Automated detection systems for FCD are now extensively developing, yet it requires large datasetswith annotated data.  The aim of this study is to enhance the detection of FCD with the means of transfer learning.
+
+## 1. Detection
+
+`baseline` folder contains instructions and tests for medical-detection. 
+Code reproduction for the paper: https://doi.org/10.1016/j.compmedimag.2019.101662
+
+## 2. Segmentation
+
+`segmentation` folder contains segmentation model train and transfer.
+Code reproduction for the paper: https://arxiv.org/abs/2003.04696
+
+## 3. Classification
+
+`classification` folder contains fader net architecture and CNN interpretation unit as well as baseline model.
