@@ -62,6 +62,9 @@ SPATIAL_DIMENSIONS = 2, 3, 4
 MRI = 'MRI'
 LABEL = 'LABEL'
 
+LIST_FCD =  [ 8,   10,   11,   12,   13,    16,   17,   18,  26,  47, 49,   50, 
+  51,   52,   53,   54,   58,  85,  251,  252,  253,  254,  255]
+
 class Action(enum.Enum):
     TRAIN = 'Training'
     VALIDATE = 'Validation'
@@ -169,10 +172,13 @@ def prepare_batch(batch, device):
     """
     inputs = batch[MRI][DATA].to(device)
     targets = batch[LABEL][DATA]
-    targets[targets < 1000] = 0
+    targets[0][0][(np.isin(targets[0][0], LIST_FCD))] = 1
     targets[targets >= 1000] = 1
+    targets[targets != 1] = 0
     targets = targets.to(device)    
     return inputs, targets
+
+
 
 def get_iou_score(prediction, ground_truth):
     n_images = len(prediction)
@@ -282,7 +288,7 @@ def train(num_epochs, training_loader, validation_loader, model, optimizer, sche
         if (epoch_idx% save_epoch == 0):
             torch.save(model.state_dict(), f'weights/{weights_stem}_epoch_{epoch_idx}.pth')
             
-def get_model_and_optimizer(device, num_encoding_blocks=3, out_channels_first_layer=8, patience=3):
+def get_model_and_optimizer(device, num_encoding_blocks=3, out_channels_first_layer=16, patience=3):
     
     # reproducibility
     torch.manual_seed(0)
