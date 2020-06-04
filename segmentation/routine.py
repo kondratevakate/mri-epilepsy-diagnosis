@@ -44,7 +44,12 @@ from torchio.transforms import (
     OneOf,
     Compose,
 )
-
+        
+from metrics import (
+    compute_dice_coefficient, 
+    compute_surface_distances, 
+    compute_average_surface_distance
+)
 
 """
     Code adapted from: https://github.com/fepegar/torchio#credits
@@ -97,8 +102,8 @@ def get_loaders(data, cv_split,
         samples_per_volume = 6,
         max_queue_length = 180,
         training_batch_size = 1,
-        validation_batch_size = 1, 
-        target_type = img_seg):
+        validation_batch_size = 1,
+        mask = False):
     
     """
     The function creates dataloaders 
@@ -117,13 +122,24 @@ def get_loaders(data, cv_split,
     training_set = get_torchio_dataset(
         list(data.img_files[training_idx].values), 
         list(data.img_seg[training_idx].values),
-        training_transform 
-    )
+        training_transform)
+    
     validation_set = get_torchio_dataset(
         list(data.img_files[validation_idx].values), 
         list(data.img_seg[validation_idx].values),
-        validation_transform
-    )
+        validation_transform)
+    
+    if mask:
+        # if using masked data for training
+        training_set = get_torchio_dataset(
+            list(data.img_files[training_idx].values), 
+            list(data.img_mask[training_idx].values),
+            training_transform)
+        
+        validation_set = get_torchio_dataset(
+            list(data.img_files[validation_idx].values), 
+            list(data.img_mask[validation_idx].values),
+            validation_transform)
     
     training_loader = torch.utils.data.DataLoader(
         training_set, batch_size=training_batch_size)
@@ -180,13 +196,45 @@ def prepare_batch(batch, device):
     return inputs, targets
 
 def get_iou_score(prediction, ground_truth):
-    n_images = len(prediction)
     intersection, union = 0, 0
-    for i in range(n_images):
-        intersection += np.logical_and(prediction[i] > 0, ground_truth[i] > 0).astype(np.float32).sum() 
-        union += np.logical_or(prediction[i] > 0, ground_truth[i] > 0).astype(np.float32).sum()
+    intersection += np.logical_and(prediction > 0, ground_truth > 0).astype(np.float32).sum() 
+    union += np.logical_or(prediction > 0, ground_truth > 0).astype(np.float32).sum()
     iou_score = float(intersection) / union
     return iou_score
+
+def calculate_metrics(surface, prediction):
+    dsc = compute_dice_coefficient(surface, prediction)
+    asd_mean, asd_std = compute_average_surface_distance(
+        compute_surface_distances(
+            surface, prediction, spacing_mm=(1,1,1))
+    )
+    
+    iou = get_iou_score(prediction, surface)
+    
+    return dsc, asd_mean, asd_std, iou        
+        
+        
+def validate_dsc_asd(model, loader):
+    
+    dsc, asd_mean, asd_std, iou = [], [], [], []
+    model.eval()
+
+    for batch_idx, batch in enumerate(tqdm(loader)):
+            inputs, targets = prepare_batch(batch, device)
+            with torch.no_grad():
+                logits = forward(model, inputs)
+            labels = logits.argmax(dim=CHANNELS_DIMENSION)
+            prediction = labels[0].cpu().numpy().astype(np.uint8)
+            dsc_temp, asd_mean_temp, asd_std_temp, iou_temp = calculate_metrics(
+                targets.cpu().numpy().astype(np.uint8)[0][0], 
+                prediction
+            )
+            dsc.append(dsc_temp)
+            asd_mean.append(asd_mean_temp)
+            asd_std.append(asd_std_temp)
+            iou.append(iou_temp)
+    
+    return dsc, asd_mean, asd_std, iou
 
 def get_dice_score(output, target, SPATIAL_DIMENSIONS = (2, 3, 4), epsilon=1e-9):
     p0 = output

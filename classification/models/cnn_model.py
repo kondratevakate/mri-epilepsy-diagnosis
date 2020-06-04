@@ -202,3 +202,51 @@ class ConvLSTM(nn.Module):
         out = self.relu(out)
         out = self.fc2(out)
         return out
+
+    
+class DilatedCNN(nn.Module):
+    def __init__(self, input_shape=(180, 180, 180), n_channels = 32):
+        super(self.__class__, self).__init__()
+        self.model = nn.Sequential()
+
+        self.model.add_module("conv3d_1", nn.Conv3d(1, n_channels, kernel_size = 3, stride = 2, dilation = 3))  # 32 87 87 87 
+        self.model.add_module("batch_norm_1", nn.BatchNorm3d(n_channels))
+        self.model.add_module("activation_1", nn.LeakyReLU())
+        
+        self.model.add_module("conv3d_2", nn.Conv3d(n_channels, n_channels, kernel_size=3, stride=1, dilation=3, padding = 3))  
+        self.model.add_module("batch_norm_2", nn.BatchNorm3d(n_channels))
+        self.model.add_module("activation_2", nn.LeakyReLU())
+        self.model.add_module("max_pool3d_1", nn.MaxPool3d(kernel_size=4,stride = 2))  #42 42
+
+        self.model.add_module("conv3d_3", nn.Conv3d(n_channels, 2*n_channels, kernel_size=3, stride=2, dilation=3))# 64 18 18 18
+        self.model.add_module("batch_norm_3", nn.BatchNorm3d(2*n_channels))
+        self.model.add_module("activation_3", nn.LeakyReLU())
+        
+        self.model.add_module("conv3d_4", nn.Conv3d(2*n_channels, 2*n_channels, kernel_size=3, stride=1, dilation=3,padding = 3))  # 8 *45 *45 45
+        self.model.add_module("batch_norm_4", nn.BatchNorm3d(2*n_channels))
+        self.model.add_module("activation_4", nn.LeakyReLU())
+        self.model.add_module("max_pool3d_2", nn.MaxPool3d(kernel_size=4,stride = 2)) # 64 8 8 8  
+        
+        self.model.add_module("conv3d_5", nn.Conv3d(2*n_channels, 4*n_channels, kernel_size=3, dilation = 3, padding = 3))#128 8 8 8
+        self.model.add_module("batch_norm_5", nn.BatchNorm3d(4*n_channels))
+        self.model.add_module("activation_5", nn.LeakyReLU())
+        
+        self.model.add_module("conv3d_6", nn.Conv3d(4*n_channels, 4*n_channels, kernel_size=3, dilation = 3, stride = 1))  
+        self.model.add_module("batch_norm_6", nn.BatchNorm3d(4*n_channels))
+        self.model.add_module("activation_6", nn.LeakyReLU())
+#         self.model.add_module("max_pool3d_3", nn.MaxPool3d(kernel_size=2))# 128 2 2 2
+        
+        
+        self.model.add_module("flatten_1", Flatten())
+        
+        self.model.add_module("fully_conn_1", nn.Linear(4*n_channels*2*2*2, 256))
+        self.model.add_module("activation_7", nn.LeakyReLU())
+        self.model.add_module("fully_conn_2", nn.Linear(256, 128))
+        self.model.add_module("activation_8", nn.LeakyReLU())
+        self.model.add_module("fully_conn_3", nn.Linear(128, 2))
+        self.model.add_module("softmax", nn.Softmax(dim=-1))
+
+
+    def forward(self, x):
+#         print(x.shape)
+        return self.model(x)
