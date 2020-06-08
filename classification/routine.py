@@ -35,6 +35,7 @@ def run_one_epoch(model, loader, criterion, train, device,
             scheduler.step(loss)
                     
         losses.append(loss.data.cpu().numpy())
+        
         probs.extend(F.softmax(outputs, dim=-1).cpu().data.numpy()[:, 1])
         targets.extend(list(target.cpu().data.numpy()))
                 
@@ -178,7 +179,7 @@ def stratified_batch_indices(indices, labels):
     assert len(result) == len(indices)
     return result
 
-def cross_val_score(cnn_model, train_dataset, cv, device, metric, holdout_idx,
+def cross_val_score(cnn_model, train_dataset, cv, device, metric, holdout_idx = None,
                     model_load_path=None, batch_size=10, val_dataset=None, transfer=False, 
                     finetune=False, experiment = False, max_epoch=20):
     
@@ -189,9 +190,11 @@ def cross_val_score(cnn_model, train_dataset, cv, device, metric, holdout_idx,
     if val_dataset is None:  # smri case or fmri case without rest
         val_dataset = train_dataset
         use_rest = False
-
-#     cv_splits = list(cv.split(X=np.arange(len(train_dataset)), y=train_dataset.target))
-    cv_splits = list(cv.split(X=np.arange(len(holdout_idx)), y=train_dataset.target[holdout_idx.index]))
+    if holdout_idx is not None:
+        cv_splits = list(cv.split(X=np.arange(len(holdout_idx)), y=train_dataset.target[holdout_idx.index]))
+    else:
+        cv_splits = list(cv.split(X=np.arange(len(train_dataset)), y=train_dataset.target))
+    
     val_metrics = []
 
     for i in range(len(cv_splits)):
@@ -235,7 +238,11 @@ def cross_val_score(cnn_model, train_dataset, cv, device, metric, holdout_idx,
             with torch.no_grad():
                 val_losses, val_probs, val_targets = run_one_epoch(
                     model, val_loader, criterion, False, device, scheduler)
-            val_metric = metric(val_targets, val_probs)
+                if metric.__name__ == 'roc_auc_score':
+                    val_metric = metric(val_targets, val_probs)
+                if metric.__name__ == 'accuracy_score':
+                    val_metric = metric(val_targets, np.where(np.array(val_probs)<=0.5, 0, 1))
+            
             val_metrics.append(val_metric)
         if model_load_path is None:
             del train_loader
